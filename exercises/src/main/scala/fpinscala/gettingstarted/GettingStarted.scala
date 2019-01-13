@@ -168,8 +168,7 @@ object PolymorphicFunctions {
 
   // Note that `=>` associates to the right, so we could
   // write the return type as `A => B => C`
-  def curry[A,B,C](f: (A, B) => C): A => (B => C) =
-    ???
+  def curry[A,B,C](f: (A, B) => C): A => (B => C) = (a:A) => (b:B) => f(a, b)
 
   // NB: The `Function2` trait has a `curried` method already
 
@@ -210,4 +209,17 @@ object TestIsSorted{
     println(s"""isSorted(Array("apple", "banana", "orange"), (a:String, b:String) => a > b) = ${
       isSorted(Array("apple", "banana", "orange"), (a:String, b:String) => a > b)}""")
   }
+}
+
+object TestCurry{
+  import PolymorphicFunctions._
+
+  def main(args: Array[String]): Unit = {
+    println(s"curry((a:Int, b:Int) => a+b)(1)(2) = ${curry((a:Int, b:Int) => a+b)(1)(2)}")
+    println(
+      s"val timesTwo = curry((a:Int, b:Int) => a*b)(2); timesTwo(5) = ${
+      val timesTwo = curry((a:Int, b:Int) => a*b)(2); timesTwo(5)}"
+    )
+  }
+
 }
