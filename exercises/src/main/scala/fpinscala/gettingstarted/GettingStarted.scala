@@ -187,8 +187,7 @@ object PolymorphicFunctions {
 
   // Exercise 5: Implement `compose`
 
-  def compose[A,B,C](f: B => C, g: A => B): A => C =
-    ???
+  def compose[A,B,C](f: B => C, g: A => B): A => C = (a:A) => f(g(a))
 }
 
 
@@ -232,5 +231,16 @@ object TestUnCurry{
     println(
       s"uncurry((a:Int) => (b:Int) => a * b + 1)(1, 2) = ${
         uncurry((a:Int) => (b:Int) => a * b + 1)(1, 2)}")
+  }
+}
+
+
+object TestCompose{
+  import PolymorphicFunctions._
+
+  def main(args: Array[String]): Unit = {
+    println(
+      s"compose((b:Int) => b + 1, (a:Int) => a * 2)(1) = ${
+        compose((b:Int) => b + 1, (a:Int) => a * 2)(1)}")
   }
 }
