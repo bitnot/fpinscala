@@ -173,8 +173,7 @@ object PolymorphicFunctions {
   // NB: The `Function2` trait has a `curried` method already
 
   // Exercise 4: Implement `uncurry`
-  def uncurry[A,B,C](f: A => B => C): (A, B) => C =
-    ???
+  def uncurry[A,B,C](f: A => B => C): (A, B) => C = (a:A, b:B) => f(a)(b)
 
   /*
   NB: There is a method on the `Function` object in the standard library,
@@ -191,6 +190,7 @@ object PolymorphicFunctions {
   def compose[A,B,C](f: B => C, g: A => B): A => C =
     ???
 }
+
 
 object TestIsSorted{
   import PolymorphicFunctions._
@@ -211,6 +211,7 @@ object TestIsSorted{
   }
 }
 
+
 object TestCurry{
   import PolymorphicFunctions._
 
@@ -218,8 +219,18 @@ object TestCurry{
     println(s"curry((a:Int, b:Int) => a+b)(1)(2) = ${curry((a:Int, b:Int) => a+b)(1)(2)}")
     println(
       s"val timesTwo = curry((a:Int, b:Int) => a*b)(2); timesTwo(5) = ${
-      val timesTwo = curry((a:Int, b:Int) => a*b)(2); timesTwo(5)}"
+        val timesTwo = curry((a:Int, b:Int) => a*b)(2); timesTwo(5)}"
     )
   }
+}
 
+
+object TestUnCurry{
+  import PolymorphicFunctions._
+
+  def main(args: Array[String]): Unit = {
+    println(
+      s"uncurry((a:Int) => (b:Int) => a * b + 1)(1, 2) = ${
+        uncurry((a:Int) => (b:Int) => a * b + 1)(1, 2)}")
+  }
 }
