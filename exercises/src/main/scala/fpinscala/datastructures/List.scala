@@ -202,11 +202,15 @@ object List { // `List` companion object. Contains functions for creating and wo
     * O(n^2)
     *
     */
-  def allTrue(l:List[Boolean]): Boolean = foldLeft(l, true)(_ && _)
+  def startsWith[A](sup: List[A], sub: List[A]): Boolean = (sup, sub) match {
+    case (_, Nil)                     => true
+    case (Nil, _)                     => false
+    case (Cons(h1, t1), Cons(h2, t2)) => h1 == h2 && startsWith(t1, t2)
+  }
   def hasSubsequence[A](sup: List[A], sub: List[A]): Boolean = (sup, sub) match {
     case (_, Nil)             => true
     case (Nil, _)             => false
-    case (l1@Cons(h1, t1),l2) => allTrue(zipWith(sup, sub)(_ == _)) || hasSubsequence(t1, sub)
+    case (l1@Cons(h1, t1),l2) => startsWith(sup, sub) || hasSubsequence(t1, sub)
   }
 }
 
@@ -237,6 +241,7 @@ object TestList {
     println(s"List.init(List(1,2,3)) = ${List.init(List(1,2,3))}")
 
     println(s"List.hasSubsequence(List(1,2,3),List(1,2,3)) = ${List.hasSubsequence(List(1,2,3),List(1,2,3))}")
+    println(s"List.hasSubsequence(List(1,2),List(1,2,3)) = ${List.hasSubsequence(List(1,2),List(1,2,3))}")
     println(s"List.hasSubsequence(List(1,2,3),List(2,3)) = ${List.hasSubsequence(List(1,2,3),List(2,3))}")
     println(s"List.hasSubsequence(List(1,2,3),List(2)) = ${List.hasSubsequence(List(1,2,3),List(2))}")
     println(s"List.hasSubsequence(List(1,2,3),List(4,5)) = ${List.hasSubsequence(List(1,2,3),List(4,5))}")
