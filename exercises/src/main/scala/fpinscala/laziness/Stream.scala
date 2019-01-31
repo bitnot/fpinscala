@@ -8,7 +8,8 @@ trait Stream[+A] {
 
   def foldRight[B](z: => B)(f: (A, => B) => B): B = // The arrow `=>` in front of the argument type `B` means that the function `f` takes its second argument by name and may choose not to evaluate it.
     this match {
-      case Cons(h, t) => f(h(), t().foldRight(z)(f)) // If `f` doesn't evaluate its second argument, the recursion never occurs.
+      case Cons(h, t) =>
+        f(h(), t().foldRight(z)(f)) // If `f` doesn't evaluate its second argument, the recursion never occurs.
       case _ => z
     }
 
@@ -45,7 +46,7 @@ trait Stream[+A] {
 
   @tailrec
   final def drop(n: Int): Stream[A] = this match {
-    case Cons(h, t) if n > 0 => t().drop(n - 1)
+    case Cons(_, t) if n > 0 => t().drop(n - 1)
     case _ => this
   }
 
@@ -64,46 +65,100 @@ trait Stream[+A] {
     case Empty => true
   }
 
-  def forAllFR(p: A => Boolean): Boolean = this.foldRight(true)((a, b) => p(a) && b)
+  def forAllFR(p: A => Boolean): Boolean =
+    this.foldRight(true)((a, b) => p(a) && b)
 
   // 5.5
-  def takeWhileFR(p: A => Boolean): Stream[A] = this.foldRight(empty[A])((a, b) => if (p(a)) cons(a, b) else empty)
+  def takeWhileFR(p: A => Boolean): Stream[A] =
+    this.foldRight(empty[A])((a, b) => if (p(a)) cons(a, b) else empty)
 
   // 5.6
-  def headOption: Option[A] = this.foldRight(None: Option[A])((a, _) => Option(a))
-
+  def headOption: Option[A] =
+    this.foldRight(None: Option[A])((a, _) => Option(a))
 
   // 5.7 map, filter, append, flatmap using foldRight. Part of the exercise is
   // writing your own function signatures.
-  def map[B](f: A => B): Stream[B] = foldRight(empty[B])((a, b) => cons(f(a), b))
+  def map[B](f: A => B): Stream[B] =
+    foldRight(empty[B])((a, b) => cons(f(a), b))
 
-  def filter(p: A => Boolean): Stream[A] = foldRight(empty[A])((a, b) => if (p(a)) cons(a, b) else b)
+  def filter(p: A => Boolean): Stream[A] =
+    foldRight(empty[A])((a, b) => if (p(a)) cons(a, b) else b)
 
-  def append[B >: A](s: => Stream[B]): Stream[B] = foldRight(s)((a, b) => cons(a, b))
+  def append[B >: A](s: => Stream[B]): Stream[B] =
+    foldRight(s)((a, b) => cons(a, b))
 
-  def flatMap[B](f: A => Stream[B]): Stream[B] = foldRight(empty[B])((a, b) => f(a).append(b))
-
-
+  def flatMap[B](f: A => Stream[B]): Stream[B] =
+    foldRight(empty[B])((a, b) => f(a).append(b))
 
   // 5.13
-  def mapU[B](f: A => B): Stream[B] = ???
+  def mapU[B](f: A => B): Stream[B] = unfold(this) {
+    case Empty => None
+    case Cons(h, t) => Some(f(h()), t())
+  }
 
-  def takeU(n: Int): Stream[A] = ???
+  def takeU(n: Int): Stream[A] = unfold((this, n)) {
+    case (Empty, _) => None
+    case (_, x) if x <= 0 => None
+    case (Cons(h, t), k) => Some(h(), (t(), k - 1))
+  }
 
-  def takeWhileU(p: A => Boolean): Stream[A] = ???
+  def takeWhileU(p: A => Boolean): Stream[A] = unfold(this) {
+    case Empty => None
+    case Cons(h, t) =>
+      val head = h()
+      if (p(head)) Some(head, t())
+      else None
+  }
 
-  def zipWithU[B](other: Stream[B]): Stream[(A, B)] = ???
+  def zipWithU[B](other: Stream[B]): Stream[(A, B)] = unfold((this, other)) {
+    case (Empty, _) => None
+    case (_, Empty) => None
+    case (Cons(h1, t1), Cons(h2, t2)) => Some(((h1(), h2()), (t1(), t2())))
+  }
 
-  def zipAll[B](other: Stream[B]): Stream[(Option[A], Option[B])] = ???
+  def zipAll[B](other: Stream[B]): Stream[(Option[A], Option[B])] =
+    unfold((this, other)) {
+      case (Empty, Empty) => None
+      case (Cons(h1, t1), Empty) => Some(((Some(h1()), None), (t1(), Empty)))
+      case (Empty, Cons(h2, t2)) => Some(((None, Some(h2())), (Empty, t2())))
+      case (Cons(h1, t1), Cons(h2, t2)) =>
+        Some(((Some(h1()), Some(h2())), (t1(), t2())))
+    }
 
   // 5.14
-  def startsWith[B](s: Stream[B]): Boolean = ???
+  def startsWith[B](s: Stream[B]): Boolean =
+    this
+      .zipAll(s)
+      .takeWhile { case (_, b) => b.nonEmpty }
+      .forAll { case (a, b) => a == b }
 
   // 5.15
-  def tails: Stream[Stream[A]] = ???
+  def tails: Stream[Stream[A]] = unfold((this, false)) {
+    case (Empty, true) => None
+    case (Empty, false) => Some(Empty, (Empty, true))
+    case (s@Cons(_, t), _) => Some(s, (t(), false))
+  }
 
   // 5.16
-  def scanRight[B](z: => B)(f: (A, => B) => B): Stream[B] = ???
+  def scanLeft[B](z: => B)(f: (A, => B) => B): Stream[B] = {
+    lazy val zz = z
+    Stream(zz) append unfold((this, zz)) {
+      case (Empty, _) => None
+      case (Cons(h, t), x) =>
+        val y = f(h(), x)
+        Some(y, (t(), y))
+    }
+  }
+
+  def scanRight[B](z: => B)(f: (A, => B) => B): Stream[B] = {
+    lazy val zz = z
+    val bt = foldRight(zz, Stream(zz)) { case (a, (b, bs)) =>
+      val c = f(a, b)
+      (c, cons(c, bs))
+    }
+    bt._2
+  }
+
 }
 
 case object Empty extends Stream[Nothing]
@@ -148,50 +203,74 @@ object Stream {
   }
 
   // 5.12
-  lazy val fibsU: Stream[Int] = unfold[Int, (Int, Int)]((0, 1)) { case (f1, f2) => Some((f1, (f2, f1 + f2))) }
+  lazy val fibsU: Stream[Int] = unfold[Int, (Int, Int)]((0, 1)) {
+    case (f1, f2) => Some((f1, (f2, f1 + f2)))
+  }
   lazy val onesU: Stream[Int] = unfold[Int, Int](1)(x => Some((x, x)))
 
-  final def constantU(c: Int): Stream[Int] = unfold[Int, Int](c)(x => Some((x, x)))
+  final def constantU(c: Int): Stream[Int] =
+    unfold[Int, Int](c)(x => Some((x, x)))
 
-  final def fromU(n: Int): Stream[Int] = unfold[Int, Int](n)(x => Some((x, x + 1)))
+  final def fromU(n: Int): Stream[Int] =
+    unfold[Int, Int](n)(x => Some((x, x + 1)))
 
 }
-
 
 object StreamTest extends App {
 
   import Stream.cons
 
   def five() = {
-    println("five");
+    println("five")
     5
   }
 
-  val ss: Stream[Int] = cons(1, cons(2, cons(3, cons(4, Cons(five, () => Stream.empty[Int])))))
+  val ss: Stream[Int] =
+    cons(1, cons(2, cons(3, cons(4, Cons(five, () => Stream.empty[Int])))))
   println("------------------------------------------------------------")
   println(s"Stream(1,2,3,4,5).toList = ${ss.toList}")
   println("------------------------------------------------------------")
   println(s"Stream(1,2,3,4,5).take(3).toList = ${ss.take(3).toList}")
   println(s"Stream(1,2,3,4,5).take(5).toList = ${ss.take(5).toList}")
   println(s"Stream(1,2,3,4,5).take(5) = ${ss.take(5)}")
+  println(s"Stream(1,2,3,4,5).takeU(3).toList = ${ss.takeU(3).toList}")
+  println(s"Stream(1,2,3,4,5).takeU(5).toList = ${ss.takeU(5).toList}")
+  println(s"Stream(1,2,3,4,5).takeU(5) = ${ss.takeU(5)}")
   println("------------------------------------------------------------")
   println(s"Stream(1,2,3,4,5).drop(3).toList = ${ss.drop(3).toList}")
   println(s"Stream(1,2,3,4,5).drop(4).toList = ${ss.drop(4).toList}")
   println(s"Stream(1,2,3,4,5).drop(5).toList = ${ss.drop(5).toList}")
   println("------------------------------------------------------------")
-  println(s"Stream(1,2,3,4,5).takeWhile(_ < 4).toList = ${ss.takeWhile(_ < 4).toList}")
-  println(s"Stream(1,2,3,4,5).takeWhile(_ < 5).toList = ${ss.takeWhile(_ < 5).toList}")
-  println(s"Stream(1,2,3,4,5).takeWhile(_ <= 5).toList = ${ss.takeWhile(_ <= 5).toList}")
-  println(s"Stream(1,2,3,4,5).takeWhile(_ => false).toList = ${ss.takeWhile(_ => false).toList}")
+  println(
+    s"Stream(1,2,3,4,5).takeWhile(_ < 4).toList = ${ss.takeWhile(_ < 4).toList}")
+  println(
+    s"Stream(1,2,3,4,5).takeWhile(_ < 5).toList = ${ss.takeWhile(_ < 5).toList}")
+  println(
+    s"Stream(1,2,3,4,5).takeWhile(_ <= 5).toList = ${ss.takeWhile(_ <= 5).toList}")
+  println(
+    s"Stream(1,2,3,4,5).takeWhile(_ => false).toList = ${ss.takeWhile(_ => false).toList}")
+
+  println(
+    s"Stream(1,2,3,4,5).takeWhileU(_ < 4).toList = ${ss.takeWhileU(_ < 4).toList}")
+  println(
+    s"Stream(1,2,3,4,5).takeWhileU(_ < 5).toList = ${ss.takeWhileU(_ < 5).toList}")
+  println(
+    s"Stream(1,2,3,4,5).takeWhileU(_ <= 5).toList = ${ss.takeWhileU(_ <= 5).toList}")
+  println(
+    s"Stream(1,2,3,4,5).takeWhileU(_ => false).toList = ${ss.takeWhileU(_ => false).toList}")
   println("------------------------------------------------------------")
-  println(s"Stream(1,2,3,4,5).filter(_ % 2 == 0).toList = ${ss.filter(_ % 2 == 0).toList}")
+  println(
+    s"Stream(1,2,3,4,5).filter(_ % 2 == 0).toList = ${ss.filter(_ % 2 == 0).toList}")
   println("------------------------------------------------------------")
   println(s"Stream(1,2,3,4) = ${Stream(1, 2, 3, 4)}")
   println(s"Stream(1,2,3,4).map(_ + 10) = ${Stream(1, 2, 3, 4).map(_ + 10)}")
-  println(s"Stream(1,2,3,4).map(_ + 10).filter(_ % 2 == 0) = ${Stream(1, 2, 3, 4).map(_ + 10).filter(_ % 2 == 0)}")
-  println(s"Stream(1,2,3,4).map(_ + 10).filter(_ % 2 == 0).toList = ${Stream(1, 2, 3, 4).map(_ + 10).filter(_ % 2 == 0).toList}")
+  println(
+    s"Stream(1,2,3,4).map(_ + 10).filter(_ % 2 == 0) = ${Stream(1, 2, 3, 4).map(_ + 10).filter(_ % 2 == 0)}")
+  println(
+    s"Stream(1,2,3,4).map(_ + 10).filter(_ % 2 == 0).toList = ${Stream(1, 2, 3, 4).map(_ + 10).filter(_ % 2 == 0).toList}")
   println("------------------------------------------------------------")
-  println(s"Stream.constant(5).take(3).toList = ${Stream.constant(5).take(3).toList}")
+  println(
+    s"Stream.constant(5).take(3).toList = ${Stream.constant(5).take(3).toList}")
   println("------------------------------------------------------------")
   println(s"Stream.fibs.take(5).toList = ${Stream.fibs.take(5).toList}")
   println("------------------------------------------------------------")
@@ -199,7 +278,14 @@ object StreamTest extends App {
   println("------------------------------------------------------------")
   println(s"Stream.onesU.take(5).toList = ${Stream.onesU.take(5).toList}")
   println("------------------------------------------------------------")
-  println(s" = ${}")
+  println(s"Stream(1,2,3,4,5).map(_ + 5).toList = ${ss.map(_ + 5).toList}")
+  println(s"Stream(1,2,3,4,5).mapU(_ + 5).toList = ${ss.mapU(_ + 5).toList}")
+  println(
+    s"Stream(1,2,3).tails.map(_.toList).toList = ${Stream(1, 2, 3).tails.map(_.toList).toList}")
+  println(
+    s"Stream(1,2,3).scanLeft(0)(_ + _).toList = ${Stream(1, 2, 3).scanLeft(0)(_ + _).toList}")
+  println(
+    s"Stream(1,2,3).scanRight(0)(_ + _).toList = ${Stream(1, 2, 3).scanRight(0)(_ + _).toList}")
   println(s" = ${}")
 
 }
